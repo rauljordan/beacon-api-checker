@@ -30,26 +30,14 @@ struct Cli {
 }
 
 type ToolResult = Result<(), Report>;
-type AsyncResult = Pin<Box<dyn Future<Output = ToolResult>>>;
-type CheckerFn = Box<dyn Fn(Url) -> AsyncResult>;
+type AsyncResult = Pin<Box<dyn Future<Output = ToolResult> + Send + Sync>>;
+type ApiChecker = Box<dyn Fn(Url) -> AsyncResult + Send + Sync>;
 
-#[derive(Default)]
-pub struct TestSuiteBuilder {
-    endpoints: Vec<Url>,
-}
-
-impl TestSuiteBuilder {
-    pub fn new(endpoints: Vec<Url>) -> TestSuiteBuilder {
-        TestSuiteBuilder { endpoints }
-    }
-    pub async fn run_pipeline(self, checkers: Vec<CheckerFn>) -> ToolResult {
-        for endpoint in self.endpoints.iter() {
-            for f in checkers.iter() {
-                f(endpoint.clone()).await?;
-            }
-        }
-        Ok(())
-    }
+fn force_boxed<T>(f: fn(Url) -> T) -> ApiChecker
+where
+    T: Future<Output = ToolResult> + 'static + Send + Sync,
+{
+    Box::new(move |n| Box::pin(f(n)))
 }
 
 // TODO: Use prom metrics, keep track of different failures
@@ -61,13 +49,9 @@ impl TestSuiteBuilder {
 #[tokio::main]
 async fn main() -> eyre::Result<(), Report> {
     let subscriber = FmtSubscriber::builder()
-        // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
-        // will be written to stdout.
-        .with_max_level(Level::TRACE)
-        // completes the builder.
+        .with_max_level(Level::INFO)
         .finish();
-
-    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+    tracing::subscriber::set_global_default(subscriber)?;
 
     let cli = Cli::parse();
     let endpoints: Result<Vec<Url>, _> = cli
@@ -76,20 +60,22 @@ async fn main() -> eyre::Result<(), Report> {
         .map(|e| Url::parse(&e))
         .collect();
     let endpoints = endpoints.unwrap();
+    info!("Starting task runner");
 
-    // let pipeline: Vec<CheckerFn> = vec![Box::new(check_validators_async)];
-    // let _suite = TestSuiteBuilder::new(endpoints)
-    //     .run_pipeline(pipeline)
-    //     .await?;
-    _ = endpoints;
+    let pipeline: Vec<ApiChecker> =
+        vec![force_boxed(check_validators), force_boxed(check_balances)];
+    let suite = TestSuiteBuilder::new(endpoints)
+        .timeout(Duration::from_secs(10))
+        .pipeline(pipeline)
+        .build();
 
     let mut handles = vec![];
-    handles.push(tokio::spawn(async {
-        info!("Starting task runner");
+    handles.push(tokio::spawn(async move {
         let mut ticker = interval(Duration::from_secs(10));
         loop {
             ticker.tick().await;
-            info!("Running tasks");
+            info!("Running API checker pipeline");
+            suite.run_pipeline().await.unwrap();
         }
     }));
 
@@ -104,6 +90,8 @@ async fn main() -> eyre::Result<(), Report> {
     Ok(())
 }
 
+// TODO: Need to compare endpoints.
+// TODO: Attestations, blocks, block headers, state root, sync committees, committees, checkpoint
 pub async fn check_validators(u: Url) -> ToolResult {
     let client = Client::new(u);
     let indices: Vec<PublicKeyOrIndex> = vec![PublicKeyOrIndex::from(32)];
@@ -111,25 +99,62 @@ pub async fn check_validators(u: Url) -> ToolResult {
     let resp = client
         .get_validators(StateId::Head, &indices, &filters)
         .await?;
-    println!("{:?}", resp);
+    info!("Got validators result {:?}", resp);
     crate::metrics::VALIDATORS_NOT_EQUAL_TOTAL.inc();
     Ok(())
-}
-
-fn check_validators_async(u: Url) -> Pin<Box<dyn Future<Output = ToolResult>>> {
-    Box::pin(check_validators(u))
 }
 
 pub async fn check_balances(u: Url) -> Result<(), Report> {
     let client = Client::new(u);
     let indices: Vec<PublicKeyOrIndex> = vec![PublicKeyOrIndex::from(32)];
-    let filters: Vec<ValidatorStatus> = vec![];
     let resp = client.get_balances(StateId::Head, &indices).await?;
-    println!("{:?}", resp.len());
+    let balances: Vec<u64> = resp.into_iter().map(|b| b.balance as u64).collect();
+    info!("Got balances result {:?}", balances);
     crate::metrics::VALIDATORS_NOT_EQUAL_TOTAL.inc();
     Ok(())
 }
 
-fn check_balances_async(u: Url) -> Pin<Box<dyn Future<Output = ToolResult>>> {
-    Box::pin(check_balances(u))
+pub async fn check_blocks(u: Url) -> Result<(), Report> {
+    let client = Client::new(u);
+    let indices: Vec<PublicKeyOrIndex> = vec![PublicKeyOrIndex::from(32)];
+    let resp = client.get_balances(StateId::Head, &indices).await?;
+    let balances: Vec<u64> = resp.into_iter().map(|b| b.balance as u64).collect();
+    info!("Got balances result {:?}", balances);
+    crate::metrics::VALIDATORS_NOT_EQUAL_TOTAL.inc();
+    Ok(())
+}
+
+#[derive(Default)]
+pub struct TestSuiteBuilder {
+    pub endpoints: Vec<Url>,
+    timeout: Duration,
+    pub fns: Vec<ApiChecker>,
+}
+
+impl TestSuiteBuilder {
+    pub fn new(endpoints: Vec<Url>) -> TestSuiteBuilder {
+        TestSuiteBuilder {
+            endpoints,
+            fns: vec![],
+            timeout: Duration::from_secs(10),
+        }
+    }
+    pub fn timeout(mut self, timeout: Duration) -> TestSuiteBuilder {
+        self.timeout = timeout;
+        self
+    }
+    pub fn pipeline(mut self, fns: Vec<ApiChecker>) -> TestSuiteBuilder {
+        self.fns = fns;
+        self
+    }
+    pub fn build(self) -> TestSuiteBuilder {
+        self
+    }
+    pub async fn run_pipeline(&self) -> ToolResult {
+        for f in self.fns.iter() {
+            let url = Url::parse("http://localhost:3500").unwrap();
+            f(url).await?;
+        }
+        Ok(())
+    }
 }
