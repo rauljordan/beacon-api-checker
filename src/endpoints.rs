@@ -1,6 +1,10 @@
 use crate::types::*;
 use beacon_api_client::{BlockId, Client, PublicKeyOrIndex, StateId, ValidatorStatus};
-use ethereum_consensus::{clock, phase0::mainnet::SignedBeaconBlock, primitives::ValidatorIndex};
+use ethereum_consensus::{
+    clock,
+    phase0::mainnet::SignedBeaconBlock,
+    primitives::{Root, ValidatorIndex},
+};
 use eyre::Result;
 use human_duration::human_duration;
 use rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
@@ -9,18 +13,43 @@ use tokio::time::Instant;
 use tracing::{info, warn};
 use url::Url;
 
-// pub async fn check_state_roots(urls: Vec<Url>) -> Result<()> {
-//     Ok(())
-// }
+pub async fn check_state_root(urls: Vec<Url>) -> Result<()> {
+    let mut responses: Vec<Root> = vec![];
+    let mut latencies = vec![];
 
-// pub async fn check_state_fork(urls: Vec<Url>) -> Result<()> {
-//     Ok(())
-// }
+    let id = random_state_id();
+    let method = format!("/eth/v1/beacon/states/{}/root", id.inner);
+    let mut succeeded = 0;
+    for u in urls.iter() {
+        // TODO: Share the clients instead.
+        let client = Client::new(u.clone());
+        let start = Instant::now();
+        info!("Calling {} endpoint={}", method, u);
+        let data = match client.get_state_root(id.clone().inner).await {
+            Ok(res) => res,
+            Err(e) => {
+                warn!("Request method={} endpoint={} failed {:?}", method, u, e);
+                continue;
+            }
+        };
+        latencies.push(start.elapsed().as_millis() as u64);
+        responses.push(data);
+        succeeded += 1;
+    }
+    let median_latency = Duration::from_millis(median(&mut latencies));
+    info!(
+        "{} median_response_time={}",
+        method,
+        human_duration(&median_latency),
+    );
+    crate::metrics::GET_STATE_ROOT_LATENCY_MILLISECONDS.observe(median_latency.as_millis() as f64);
 
-// pub async fn check_block_header(urls: Vec<Url>) -> Result<()> {
-//     Ok(())
-// }
-//
+    if mismatched_responses(&method, &urls, responses, succeeded) {
+        crate::metrics::STATE_ROOT_NOT_EQUAL_TOTAL.inc();
+        warn!("MISMATCHED REQUEST: endpoint={}", method);
+    }
+    Ok(())
+}
 
 pub async fn check_finality_checkpoints(urls: Vec<Url>) -> Result<()> {
     let mut responses: Vec<FinalityCheckpointsExt> = vec![];

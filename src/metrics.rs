@@ -30,6 +30,11 @@ lazy_static! {
         "Mismatched get_finality_checkpoints responses",
     )
     .unwrap();
+    pub static ref STATE_ROOT_NOT_EQUAL_TOTAL: IntCounter = register_int_counter!(
+        "api_checker_get_state_root_unequal_total",
+        "Mismatched get_state_root responses",
+    )
+    .unwrap();
 
     // Latency metrics.
     pub static ref GET_VALIDATORS_LATENCY_MILLISECONDS: Histogram = register_histogram!(
@@ -50,6 +55,11 @@ lazy_static! {
     pub static ref GET_FINALITY_CHECKPOINTS_LATENCY_MILLISECONDS: Histogram = register_histogram!(
         "api_checker_get_finality_checkpoints_latency_milliseconds",
         "Median latency of API responses for /eth/v1/beacon/finality_checkpoints in millis",
+        HTTP_RESPONSE_TIME_CUSTOM_BUCKETS.to_vec(),
+    ).unwrap();
+    pub static ref GET_STATE_ROOT_LATENCY_MILLISECONDS: Histogram = register_histogram!(
+        "api_checker_get_state_root_latency_milliseconds",
+        "Median latency of API responses for /eth/v1/beacon/states/root in millis",
         HTTP_RESPONSE_TIME_CUSTOM_BUCKETS.to_vec(),
     ).unwrap();
 }

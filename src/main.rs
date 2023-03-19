@@ -1,6 +1,5 @@
 use axum::{routing::get, Router};
 use clap::Parser;
-use endpoints::check_finality_checkpoints;
 use eyre::Result;
 use futures::future::join_all;
 use tokio::time::{interval, Duration};
@@ -14,7 +13,9 @@ mod metrics;
 mod types;
 
 use crate::api_checker::{force_boxed, ApiChecker, CheckerFn};
-use crate::endpoints::{check_balances, check_block, check_validators};
+use crate::endpoints::{
+    check_balances, check_block, check_finality_checkpoints, check_state_root, check_validators,
+};
 
 #[derive(Parser, Debug)]
 #[command(name = "beacon-api-checker")]
@@ -60,6 +61,7 @@ async fn main() -> Result<()> {
         force_boxed(check_balances),
         force_boxed(check_block),
         force_boxed(check_finality_checkpoints),
+        force_boxed(check_state_root),
     ];
 
     // Builds an API checker from our specified CLI flags
