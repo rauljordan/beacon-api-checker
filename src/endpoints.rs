@@ -1,7 +1,9 @@
 use crate::types::*;
 use beacon_api_client::{BlockId, Client, PublicKeyOrIndex, StateId, ValidatorStatus};
-use ethereum_consensus::phase0::mainnet::SignedBeaconBlock;
+use ethereum_consensus::{phase0::mainnet::SignedBeaconBlock, primitives::ValidatorIndex};
 use eyre::Result;
+use human_duration::human_duration;
+use rand::{seq::SliceRandom, Rng};
 use tokio::time::Instant;
 use tracing::{info, warn};
 use url::Url;
@@ -25,10 +27,23 @@ pub async fn check_block_header(urls: Vec<Url>) -> Result<()> {
 pub async fn check_block(urls: Vec<Url>) -> Result<()> {
     let mut responses: Vec<SignedBeaconBlock> = vec![];
 
+    let id = random_block_id();
     for u in urls.iter() {
         // TODO: Share the clients instead.
         let client = Client::new(u.clone());
-        let block = client.get_beacon_block(BlockId::Head).await?;
+        let start = Instant::now();
+        info!(
+            "Calling /eth/v1/beacon/{}/block endpoint={}",
+            id.clone().inner,
+            u,
+        );
+        let block = client.get_beacon_block(id.clone().inner).await?;
+        info!(
+            "/eth/v1/beacon/{}/block response_time={}, endpoint={}",
+            id.clone().inner,
+            human_duration(&start.elapsed()),
+            u,
+        );
         responses.push(block);
     }
 
@@ -47,7 +62,7 @@ pub async fn check_block(urls: Vec<Url>) -> Result<()> {
         }
     }
     info!(
-        "Got equal /eth/v2/beacon/blocks responses across all {} endpoints",
+        "Got equal /eth/v2/beacon/blocks across {} endpoints",
         urls.len(),
     );
     Ok(())
@@ -56,24 +71,29 @@ pub async fn check_block(urls: Vec<Url>) -> Result<()> {
 pub async fn check_validators(urls: Vec<Url>) -> Result<()> {
     let mut responses: Vec<Vec<ValidatorSummaryExt>> = vec![];
 
+    let indices = random_validator_indices();
+    let id = random_state_id();
+    let filters: Vec<ValidatorStatus> = vec![];
     for u in urls.iter() {
         // TODO: Share the clients instead.
         let client = Client::new(u.clone());
 
-        // TODO: Randomly generate and test different kinds of state ids.
-        let indices: Vec<PublicKeyOrIndex> = vec![
-            PublicKeyOrIndex::from(10912),
-            PublicKeyOrIndex::from(0),
-            PublicKeyOrIndex::from(400000),
-        ];
-        let filters: Vec<ValidatorStatus> = vec![];
         let start = Instant::now();
+        info!(
+            "Calling /eth/v1/beacon/{}/validators endpoint={}, num_indices={}",
+            id.clone().inner,
+            u,
+            indices.len(),
+        );
         let mut validators = client
-            .get_validators(StateId::Head, &indices, &filters)
+            .get_validators(id.clone().inner, &indices, &filters)
             .await?;
         info!(
-            "Validators response took {} milliseconds",
-            start.elapsed().as_millis()
+            "/eth/v1/beacon/{}/validators response_time={}, endpoint={}, num_indices={}",
+            id.clone().inner,
+            human_duration(&start.elapsed()),
+            u,
+            indices.len(),
         );
         // Sort by validator index.
         validators.sort_by(|a, b| a.index.cmp(&b.index));
@@ -96,7 +116,7 @@ pub async fn check_validators(urls: Vec<Url>) -> Result<()> {
         }
     }
     info!(
-        "Got equal /eth/v1/beacon/validators responses across all {} endpoints",
+        "Got equal /eth/v1/beacon/validators across {} endpoints",
         urls.len(),
     );
     Ok(())
@@ -105,17 +125,26 @@ pub async fn check_validators(urls: Vec<Url>) -> Result<()> {
 pub async fn check_balances(urls: Vec<Url>) -> Result<()> {
     let mut responses: Vec<Vec<BalanceSummaryExt>> = vec![];
 
+    let indices = random_validator_indices();
+    let id = random_state_id();
     for u in urls.iter() {
         // TODO: Share the clients instead.
         let client = Client::new(u.clone());
-
-        // TODO: Randomly generate and test different kinds of state ids.
-        let indices: Vec<PublicKeyOrIndex> = vec![
-            PublicKeyOrIndex::from(10912),
-            PublicKeyOrIndex::from(0),
-            PublicKeyOrIndex::from(400000),
-        ];
-        let mut balances = client.get_balances(StateId::Head, &indices).await?;
+        let start = Instant::now();
+        info!(
+            "Calling /eth/v1/beacon/{}/balances endpoint={}, num_indices={}",
+            id.clone().inner,
+            u,
+            indices.len(),
+        );
+        let mut balances = client.get_balances(id.clone().inner, &indices).await?;
+        info!(
+            "/eth/v1/beacon/{}/validators response_time={}, endpoint={}, num_indices={}",
+            id.clone().inner,
+            human_duration(&start.elapsed()),
+            u,
+            indices.len(),
+        );
         // Sort by validator index.
         balances.sort_by(|a, b| a.index.cmp(&b.index));
         let ext = balances
@@ -137,8 +166,68 @@ pub async fn check_balances(urls: Vec<Url>) -> Result<()> {
         }
     }
     info!(
-        "Got equal /eth/v1/beacon/balances responses across all {} endpoints",
+        "Got equal /eth/v1/beacon/balances across {} endpoints",
         urls.len(),
     );
     Ok(())
+}
+
+fn random_state_id() -> StateIdExt {
+    let mut ids = vec![StateId::Finalized, StateId::Justified, StateId::Head];
+    let mut rng = rand::thread_rng();
+
+    // TODO: Configure based on current slot.
+    let slot: u64 = rng.gen_range(5_900_000..6_000_000);
+    ids.push(StateId::Slot(slot));
+    match ids.choose(&mut rng).unwrap() {
+        &StateId::Finalized => StateIdExt {
+            inner: StateId::Finalized,
+        },
+        &StateId::Justified => StateIdExt {
+            inner: StateId::Justified,
+        },
+        &StateId::Head => StateIdExt {
+            inner: StateId::Head,
+        },
+        &StateId::Slot(x) => StateIdExt {
+            inner: StateId::Slot(x),
+        },
+        _ => unreachable!(),
+    }
+}
+
+fn random_validator_indices() -> Vec<PublicKeyOrIndex> {
+    let mut indices: Vec<PublicKeyOrIndex> = vec![];
+    let mut rng = rand::thread_rng();
+    // TODO: Configure.
+    let num_elems: u64 = rng.gen_range(0..100);
+    for _ in 0..num_elems {
+        let idx: usize = rng.gen_range(0..500_000);
+        indices.push(PublicKeyOrIndex::from(ValidatorIndex::from(idx)));
+    }
+    indices
+}
+
+fn random_block_id() -> BlockIdExt {
+    let mut ids = vec![BlockId::Genesis, BlockId::Finalized, BlockId::Head];
+    let mut rng = rand::thread_rng();
+
+    // TODO: Configure based on current slot.
+    let slot: u64 = rng.gen_range(5_990_000..6_000_000);
+    ids.push(BlockId::Slot(slot));
+    match ids.choose(&mut rng).unwrap() {
+        &BlockId::Genesis => BlockIdExt {
+            inner: BlockId::Genesis,
+        },
+        &BlockId::Finalized => BlockIdExt {
+            inner: BlockId::Finalized,
+        },
+        &BlockId::Head => BlockIdExt {
+            inner: BlockId::Head,
+        },
+        &BlockId::Slot(x) => BlockIdExt {
+            inner: BlockId::Slot(x),
+        },
+        _ => unreachable!(),
+    }
 }

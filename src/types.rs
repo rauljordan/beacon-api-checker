@@ -1,5 +1,60 @@
-use beacon_api_client::{BalanceSummary, ValidatorStatus, ValidatorSummary};
+use beacon_api_client::{BalanceSummary, BlockId, StateId, ValidatorStatus, ValidatorSummary};
 use ethereum_consensus::capella::mainnet::SignedBeaconBlock;
+
+pub struct StateIdExt {
+    pub inner: StateId,
+}
+
+impl Clone for StateIdExt {
+    fn clone(&self) -> Self {
+        match self.inner {
+            StateId::Genesis => StateIdExt {
+                inner: StateId::Genesis,
+            },
+            StateId::Finalized => StateIdExt {
+                inner: StateId::Finalized,
+            },
+            StateId::Justified => StateIdExt {
+                inner: StateId::Justified,
+            },
+            StateId::Head => StateIdExt {
+                inner: StateId::Head,
+            },
+            StateId::Slot(x) => StateIdExt {
+                inner: StateId::Slot(x),
+            },
+            StateId::Root(x) => StateIdExt {
+                inner: StateId::Root(x),
+            },
+        }
+    }
+}
+
+pub struct BlockIdExt {
+    pub inner: BlockId,
+}
+
+impl Clone for BlockIdExt {
+    fn clone(&self) -> Self {
+        match self.inner {
+            BlockId::Genesis => BlockIdExt {
+                inner: BlockId::Genesis,
+            },
+            BlockId::Finalized => BlockIdExt {
+                inner: BlockId::Finalized,
+            },
+            BlockId::Head => BlockIdExt {
+                inner: BlockId::Head,
+            },
+            BlockId::Slot(x) => BlockIdExt {
+                inner: BlockId::Slot(x),
+            },
+            BlockId::Root(x) => BlockIdExt {
+                inner: BlockId::Root(x),
+            },
+        }
+    }
+}
 
 pub struct SignedBeaconBlockExt {
     pub inner: SignedBeaconBlock,
