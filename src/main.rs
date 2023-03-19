@@ -37,28 +37,40 @@ struct Cli {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Sets up our logging to capture INFO objects to stdout.
     let subscriber = FmtSubscriber::builder()
         .with_max_level(Level::INFO)
         .finish();
     tracing::subscriber::set_global_default(subscriber)?;
 
     let cli = Cli::parse();
+
+    // Parses the list of specified beacon API endpoints.
     let endpoints: Result<Vec<Url>, _> = cli
         .beacon_api_endpoints
         .into_iter()
         .map(|e| Url::parse(&e))
         .collect();
 
+    // Defines a pipeline of functions to run through our API checker.
+    // Each function will call a respective API endpoint across all specified
+    // beacon node URLs and cross-check their responses.
+    // At this time, the pipeline is executed sequentially.
+    // TODO: Use rayon for optional parallelism.
     let pipeline: Vec<CheckerFn> = vec![
         force_boxed(check_validators),
         force_boxed(check_balances),
         force_boxed(check_validators),
         force_boxed(check_balances),
     ];
+
+    // Builds an API checker from our specified CLI flags
+    // and the pipeline defined above.
     let mut api_checker = ApiChecker::new()
         .timeout(Duration::from_secs(10))
         .endpoints(endpoints.unwrap())
         .pipeline(pipeline);
+
     if cli.http_timeout.is_some() {
         api_checker = api_checker.timeout(cli.http_timeout.unwrap());
     }
@@ -67,6 +79,7 @@ async fn main() -> Result<()> {
     }
     api_checker = api_checker.build();
 
+    // Rnus our API checker and metrics server in the background.
     let mut handles = vec![];
     handles.push(tokio::spawn(run_api_checker(api_checker)));
 

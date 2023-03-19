@@ -4,9 +4,15 @@ use std::pin::Pin;
 use tokio::time::Duration;
 use url::Url;
 
-pub type AsyncResult = Pin<Box<dyn Future<Output = Result<()>> + Send + Sync>>;
+/// Turns the eyre Result type into an boxed future.
+type AsyncResult = Pin<Box<dyn Future<Output = Result<()>> + Send + Sync>>;
+
+/// Defines a function that can make API checks to series of endpoints
+/// and verify the equality of the responses.
 pub type CheckerFn = Box<dyn Fn(Url) -> AsyncResult + Send + Sync>;
 
+/// Forces a value a future to be boxed and send+sync for use
+/// across threads in tokio.
 pub fn force_boxed<T>(f: fn(Url) -> T) -> CheckerFn
 where
     T: Future<Output = Result<()>> + 'static + Send + Sync,
@@ -14,10 +20,17 @@ where
     Box::new(move |n| Box::pin(f(n)))
 }
 
+/// ApiChecker defines a struct which can perform a series of stress tests
+/// and conformity checks against a series of beacon API endpoints
 pub struct ApiChecker {
+    /// How often to run the API checks against all endpoints.
     pub run_every: Duration,
+    /// The beacon api endpoints to request.
     endpoints: Vec<Url>,
+    /// The HTTP timeout when making requests.
     timeout: Duration,
+    /// A pipeline of functions that the API checker will run
+    /// against the endpoints to check for conformity.
     fns: Vec<CheckerFn>,
 }
 
