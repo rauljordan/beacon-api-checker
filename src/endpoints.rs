@@ -4,101 +4,82 @@ use ethereum_consensus::{clock, phase0::mainnet::SignedBeaconBlock, primitives::
 use eyre::Result;
 use human_duration::human_duration;
 use rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
+use std::time::Duration;
 use tokio::time::Instant;
 use tracing::{info, warn};
 use url::Url;
 
 // TODO: Dump the mismatched request if a mismatch happens to debug logs.
 
-pub async fn check_finality_checkpoints(urls: Vec<Url>) -> Result<()> {
-    Ok(())
-}
+// pub async fn check_finality_checkpoints(urls: Vec<Url>) -> Result<()> {
+//     Ok(())
+// }
 
-pub async fn check_state_roots(urls: Vec<Url>) -> Result<()> {
-    Ok(())
-}
+// pub async fn check_state_roots(urls: Vec<Url>) -> Result<()> {
+//     Ok(())
+// }
 
-pub async fn check_state_fork(urls: Vec<Url>) -> Result<()> {
-    Ok(())
-}
+// pub async fn check_state_fork(urls: Vec<Url>) -> Result<()> {
+//     Ok(())
+// }
 
-pub async fn check_block_header(urls: Vec<Url>) -> Result<()> {
-    Ok(())
-}
+// pub async fn check_block_header(urls: Vec<Url>) -> Result<()> {
+//     Ok(())
+// }
 
 pub async fn check_block(urls: Vec<Url>) -> Result<()> {
     let mut responses: Vec<SignedBeaconBlock> = vec![];
+    let mut latencies = vec![];
 
-    // TODO: Capture median latency.
-    //
     let id = random_block_id();
+    let method = format!("/eth/v2/beacon/{}/block", id.inner);
     for u in urls.iter() {
         // TODO: Share the clients instead.
         let client = Client::new(u.clone());
         let start = Instant::now();
-        info!(
-            "Calling /eth/v1/beacon/{}/block endpoint={}",
-            id.clone().inner,
-            u,
-        );
+        info!("Calling {} endpoint={}", method, u);
         let block = client.get_beacon_block(id.clone().inner).await?;
-        info!(
-            "/eth/v1/beacon/{}/block response_time={}, endpoint={}",
-            id.clone().inner,
-            human_duration(&start.elapsed()),
-            u,
-        );
+        latencies.push(start.elapsed().as_millis() as u64);
         responses.push(block);
     }
-
-    for (i, v1) in responses.iter().enumerate() {
-        for (j, v2) in responses[i..].iter().enumerate() {
-            if v1 != v2 {
-                let e1 = urls.get(i).unwrap();
-                let e2 = urls.get(j).unwrap();
-                warn!(
-                    "Urls {} and {} got mismatched /eth/v2/beacon/block responses",
-                    e1, e2
-                );
-                crate::metrics::BLOCK_NOT_EQUAL_TOTAL.inc();
-                return Ok(());
-            }
-        }
-    }
+    let median_latency = Duration::from_millis(median(&mut latencies));
     info!(
-        "Got equal /eth/v2/beacon/blocks across {} endpoints",
-        urls.len(),
+        "{} median_response_time={}",
+        method,
+        human_duration(&median_latency),
     );
+
+    if mismatched_responses(&method, &urls, responses) {
+        crate::metrics::BLOCK_NOT_EQUAL_TOTAL.inc();
+    }
     Ok(())
 }
 
 pub async fn check_validators(urls: Vec<Url>) -> Result<()> {
     let mut responses: Vec<Vec<ValidatorSummaryExt>> = vec![];
+    let mut latencies = vec![];
 
     let indices = random_validator_indices();
     let id = random_state_id();
+    let method = format!("/eth/v2/beacon/{}/validators", id.inner);
     let filters: Vec<ValidatorStatus> = vec![];
+
     for u in urls.iter() {
         // TODO: Share the clients instead.
         let client = Client::new(u.clone());
 
         let start = Instant::now();
         info!(
-            "Calling /eth/v1/beacon/{}/validators endpoint={}, num_indices={}",
-            id.clone().inner,
+            "Calling {} endpoint={}, num_indices={}",
+            method,
             u,
             indices.len(),
         );
         let mut validators = client
             .get_validators(id.clone().inner, &indices, &filters)
             .await?;
-        info!(
-            "/eth/v1/beacon/{}/validators response_time={}, endpoint={}, num_indices={}",
-            id.clone().inner,
-            human_duration(&start.elapsed()),
-            u,
-            indices.len(),
-        );
+        latencies.push(start.elapsed().as_millis() as u64);
+
         // Sort by validator index.
         validators.sort_by(|a, b| a.index.cmp(&b.index));
         let ext = validators
@@ -107,48 +88,38 @@ pub async fn check_validators(urls: Vec<Url>) -> Result<()> {
             .collect();
         responses.push(ext);
     }
-
-    for (i, v1) in responses.iter().enumerate() {
-        for (j, v2) in responses[i..].iter().enumerate() {
-            if v1 != v2 {
-                let e1 = urls.get(i).unwrap();
-                let e2 = urls.get(j).unwrap();
-                warn!("Urls {} and {} got mismatched validators responses", e1, e2);
-                crate::metrics::VALIDATORS_NOT_EQUAL_TOTAL.inc();
-                return Ok(());
-            }
-        }
-    }
+    let median_latency = Duration::from_millis(median(&mut latencies));
     info!(
-        "Got equal /eth/v1/beacon/validators across {} endpoints",
-        urls.len(),
+        "{} median_response_time={}",
+        method,
+        human_duration(&median_latency),
     );
+
+    if mismatched_responses(&method, &urls, responses) {
+        crate::metrics::VALIDATORS_NOT_EQUAL_TOTAL.inc();
+    }
     Ok(())
 }
 
 pub async fn check_balances(urls: Vec<Url>) -> Result<()> {
     let mut responses: Vec<Vec<BalanceSummaryExt>> = vec![];
+    let mut latencies = vec![];
 
     let indices = random_validator_indices();
     let id = random_state_id();
+    let method = format!("/eth/v1/beacon/{}/balances", id.inner);
     for u in urls.iter() {
         // TODO: Share the clients instead.
         let client = Client::new(u.clone());
         let start = Instant::now();
         info!(
-            "Calling /eth/v1/beacon/{}/balances endpoint={}, num_indices={}",
-            id.clone().inner,
+            "Calling {} endpoint={}, num_indices={}",
+            method,
             u,
             indices.len(),
         );
         let mut balances = client.get_balances(id.clone().inner, &indices).await?;
-        info!(
-            "/eth/v1/beacon/{}/validators response_time={}, endpoint={}, num_indices={}",
-            id.clone().inner,
-            human_duration(&start.elapsed()),
-            u,
-            indices.len(),
-        );
+        latencies.push(start.elapsed().as_millis() as u64);
         // Sort by validator index.
         balances.sort_by(|a, b| a.index.cmp(&b.index));
         let ext = balances
@@ -157,22 +128,16 @@ pub async fn check_balances(urls: Vec<Url>) -> Result<()> {
             .collect();
         responses.push(ext);
     }
-
-    for (i, v1) in responses.iter().enumerate() {
-        for (j, v2) in responses[i..].iter().enumerate() {
-            if v1 != v2 {
-                let e1 = urls.get(i).unwrap();
-                let e2 = urls.get(j).unwrap();
-                warn!("Urls {} and {} got mismatched balances responses", e1, e2);
-                crate::metrics::BALANCES_NOT_EQUAL_TOTAL.inc();
-                return Ok(());
-            }
-        }
-    }
+    let median_latency = Duration::from_millis(median(&mut latencies));
     info!(
-        "Got equal /eth/v1/beacon/balances across {} endpoints",
-        urls.len(),
+        "{} median_response_time={}, num_indices={}",
+        method,
+        human_duration(&median_latency),
+        indices.len(),
     );
+    if mismatched_responses(&method, &urls, responses) {
+        crate::metrics::BALANCES_NOT_EQUAL_TOTAL.inc();
+    }
     Ok(())
 }
 
@@ -235,5 +200,31 @@ fn random_block_id() -> BlockIdExt {
             inner: BlockId::Slot(x),
         },
         _ => unreachable!(),
+    }
+}
+
+pub fn mismatched_responses<T: Eq>(method: &str, endpoints: &[Url], v: Vec<T>) -> bool {
+    for (i, v1) in v.iter().enumerate() {
+        for (j, v2) in v[i..].iter().enumerate() {
+            if v1 != v2 {
+                let e1 = endpoints.get(i).unwrap();
+                let e2 = endpoints.get(j).unwrap();
+                warn!("Urls {} and {} got mismatched {} responses", method, e1, e2);
+                return true;
+            }
+        }
+    }
+    info!("Got equal {} across {} endpoints", method, endpoints.len());
+    false
+}
+
+fn median(latencies: &mut Vec<u64>) -> u64 {
+    latencies.sort();
+    if (latencies.len() % 2) == 0 {
+        let ind_left = latencies.len() / 2 - 1;
+        let ind_right = latencies.len() / 2;
+        (latencies[ind_left] + latencies[ind_right]) / 2
+    } else {
+        latencies[(latencies.len() / 2)]
     }
 }

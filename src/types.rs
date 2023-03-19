@@ -1,5 +1,4 @@
 use beacon_api_client::{BalanceSummary, BlockId, StateId, ValidatorStatus, ValidatorSummary};
-use ethereum_consensus::capella::mainnet::SignedBeaconBlock;
 
 pub struct StateIdExt {
     pub inner: StateId,
@@ -56,19 +55,11 @@ impl Clone for BlockIdExt {
     }
 }
 
-pub struct SignedBeaconBlockExt {
-    pub inner: SignedBeaconBlock,
-}
-
-impl PartialEq for SignedBeaconBlockExt {
-    fn eq(&self, other: &Self) -> bool {
-        return true;
-    }
-}
-
 pub struct ValidatorSummaryExt {
     pub inner: ValidatorSummary,
 }
+
+impl Eq for ValidatorSummaryExt {}
 
 impl PartialEq for ValidatorSummaryExt {
     fn eq(&self, other: &Self) -> bool {
@@ -95,6 +86,8 @@ pub struct ValidatorStatusExt {
     pub inner: ValidatorStatus,
 }
 
+impl Eq for ValidatorStatusExt {}
+
 impl PartialEq for ValidatorStatusExt {
     fn eq(&self, other: &Self) -> bool {
         let s1 = self.inner.to_string();
@@ -106,6 +99,8 @@ impl PartialEq for ValidatorStatusExt {
 pub struct BalanceSummaryExt {
     pub inner: BalanceSummary,
 }
+
+impl Eq for BalanceSummaryExt {}
 
 impl PartialEq for BalanceSummaryExt {
     fn eq(&self, other: &Self) -> bool {
