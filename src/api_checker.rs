@@ -9,11 +9,13 @@ type AsyncResult = Pin<Box<dyn Future<Output = Result<()>> + Send + Sync>>;
 
 /// Defines a function that can make API checks to series of endpoints
 /// and verify the equality of the responses.
-pub type CheckerFn = Box<dyn Fn(Url) -> AsyncResult + Send + Sync>;
+pub type CheckerFn = Box<dyn Fn(Vec<Url>) -> AsyncResult + Send + Sync>;
 
 /// Forces a value a future to be boxed and send+sync for use
-/// across threads in tokio.
-pub fn force_boxed<T>(f: fn(Url) -> T) -> CheckerFn
+/// across threads in tokio. Used to convert our simple API checker functions
+/// defined in endpoints.rs into the CheckerFn trait defined above for usage
+/// in tokio::spawn calls.
+pub fn force_boxed<T>(f: fn(Vec<Url>) -> T) -> CheckerFn
 where
     T: Future<Output = Result<()>> + 'static + Send + Sync,
 {
@@ -70,9 +72,7 @@ impl ApiChecker {
     }
     pub async fn run_pipeline(&self) -> Result<()> {
         for f in self.fns.iter() {
-            for e in self.endpoints.iter() {
-                f(e.clone()).await?;
-            }
+            f(self.endpoints.clone()).await?;
         }
         Ok(())
     }

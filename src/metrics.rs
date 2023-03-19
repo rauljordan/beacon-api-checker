@@ -15,16 +15,6 @@ lazy_static! {
         "Mismatched get_balances_responses",
     )
     .unwrap();
-    pub static ref BLOCKS_NOT_EQUAL_TOTAL: IntCounter = register_int_counter!(
-        "api_checker_get_blocks_unequal_total",
-        "Mismatched get_blocks_responses",
-    )
-    .unwrap();
-    pub static ref ATTESTATIONS_NOT_EQUAL_TOTAL: IntCounter = register_int_counter!(
-        "api_checker_get_attestations_unequal_total",
-        "Mismatched get_attestations_responses",
-    )
-    .unwrap();
 }
 
 pub async fn handler() -> Result<String, StatusCode> {

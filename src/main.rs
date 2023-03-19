@@ -56,18 +56,11 @@ async fn main() -> Result<()> {
     // Each function will call a respective API endpoint across all specified
     // beacon node URLs and cross-check their responses.
     // At this time, the pipeline is executed sequentially.
-    // TODO: Use rayon for optional parallelism.
-    let pipeline: Vec<CheckerFn> = vec![
-        force_boxed(check_validators),
-        force_boxed(check_balances),
-        force_boxed(check_validators),
-        force_boxed(check_balances),
-    ];
+    let pipeline: Vec<CheckerFn> = vec![force_boxed(check_validators), force_boxed(check_balances)];
 
     // Builds an API checker from our specified CLI flags
     // and the pipeline defined above.
     let mut api_checker = ApiChecker::new()
-        .timeout(Duration::from_secs(10))
         .endpoints(endpoints.unwrap())
         .pipeline(pipeline);
 
