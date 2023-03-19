@@ -1,12 +1,14 @@
 use crate::types::*;
 use beacon_api_client::{BlockId, Client, PublicKeyOrIndex, StateId, ValidatorStatus};
-use ethereum_consensus::{phase0::mainnet::SignedBeaconBlock, primitives::ValidatorIndex};
+use ethereum_consensus::{clock, phase0::mainnet::SignedBeaconBlock, primitives::ValidatorIndex};
 use eyre::Result;
 use human_duration::human_duration;
-use rand::{seq::SliceRandom, Rng};
+use rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 use tokio::time::Instant;
 use tracing::{info, warn};
 use url::Url;
+
+// TODO: Dump the mismatched request if a mismatch happens to debug logs.
 
 pub async fn check_finality_checkpoints(urls: Vec<Url>) -> Result<()> {
     Ok(())
@@ -27,6 +29,8 @@ pub async fn check_block_header(urls: Vec<Url>) -> Result<()> {
 pub async fn check_block(urls: Vec<Url>) -> Result<()> {
     let mut responses: Vec<SignedBeaconBlock> = vec![];
 
+    // TODO: Capture median latency.
+    //
     let id = random_block_id();
     for u in urls.iter() {
         // TODO: Share the clients instead.
@@ -172,12 +176,17 @@ pub async fn check_balances(urls: Vec<Url>) -> Result<()> {
     Ok(())
 }
 
+// Random slot in the last 100 slots on mainnet.
+fn random_slot(rng: &mut ThreadRng) -> u64 {
+    let mainnet_clock = clock::for_mainnet();
+    let curr = mainnet_clock.current_slot();
+    rng.gen_range(curr - 100..curr)
+}
+
 fn random_state_id() -> StateIdExt {
     let mut ids = vec![StateId::Finalized, StateId::Justified, StateId::Head];
     let mut rng = rand::thread_rng();
-
-    // TODO: Configure based on current slot.
-    let slot: u64 = rng.gen_range(5_900_000..6_000_000);
+    let slot: u64 = random_slot(&mut rng);
     ids.push(StateId::Slot(slot));
     match ids.choose(&mut rng).unwrap() {
         &StateId::Finalized => StateIdExt {
@@ -199,7 +208,6 @@ fn random_state_id() -> StateIdExt {
 fn random_validator_indices() -> Vec<PublicKeyOrIndex> {
     let mut indices: Vec<PublicKeyOrIndex> = vec![];
     let mut rng = rand::thread_rng();
-    // TODO: Configure.
     let num_elems: u64 = rng.gen_range(0..100);
     for _ in 0..num_elems {
         let idx: usize = rng.gen_range(0..500_000);
@@ -209,11 +217,9 @@ fn random_validator_indices() -> Vec<PublicKeyOrIndex> {
 }
 
 fn random_block_id() -> BlockIdExt {
-    let mut ids = vec![BlockId::Genesis, BlockId::Finalized, BlockId::Head];
+    let mut ids = vec![BlockId::Finalized, BlockId::Head];
     let mut rng = rand::thread_rng();
-
-    // TODO: Configure based on current slot.
-    let slot: u64 = rng.gen_range(5_990_000..6_000_000);
+    let slot: u64 = random_slot(&mut rng);
     ids.push(BlockId::Slot(slot));
     match ids.choose(&mut rng).unwrap() {
         &BlockId::Genesis => BlockIdExt {

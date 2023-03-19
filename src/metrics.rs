@@ -5,6 +5,7 @@ use lazy_static::lazy_static;
 use prometheus::register_int_counter;
 
 lazy_static! {
+    // Metrics for number of mismatched responses.
     pub static ref VALIDATORS_NOT_EQUAL_TOTAL: IntCounter = register_int_counter!(
         "api_checker_get_validators_unequal_total",
         "Mismatched get_validators responses",
