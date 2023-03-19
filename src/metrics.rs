@@ -12,7 +12,12 @@ lazy_static! {
     .unwrap();
     pub static ref BALANCES_NOT_EQUAL_TOTAL: IntCounter = register_int_counter!(
         "api_checker_get_balances_unequal_total",
-        "Mismatched get_balances_responses",
+        "Mismatched get_balances responses",
+    )
+    .unwrap();
+    pub static ref BLOCK_NOT_EQUAL_TOTAL: IntCounter = register_int_counter!(
+        "api_checker_get_beacon_block_unequal_total",
+        "Mismatched get_beacon_block responses",
     )
     .unwrap();
 }

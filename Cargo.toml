@@ -1,5 +1,5 @@
 [package]
-name = "api-checker"
+name = "beacon-api-checker"
 version = "0.1.0"
 edition = "2021"
 

@@ -3,25 +3,6 @@
 version = 3
 
 [[package]]
-name = "api-checker"
-version = "0.1.0"
-dependencies = [
- "axum",
- "beacon-api-client",
- "clap",
- "ethereum-consensus",
- "eyre",
- "futures",
- "lazy_static",
- "prometheus",
- "thiserror",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
-]
-
-[[package]]
 name = "arrayref"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -138,6 +119,25 @@ name = "base64ct"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c3c1a368f70d6cf7302d78f8f7093da241fb8e8807c05cc9e51a125895a6d5b"
+
+[[package]]
+name = "beacon-api-checker"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "beacon-api-client",
+ "clap",
+ "ethereum-consensus",
+ "eyre",
+ "futures",
+ "lazy_static",
+ "prometheus",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
 
 [[package]]
 name = "beacon-api-client"

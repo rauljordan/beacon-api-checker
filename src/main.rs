@@ -10,12 +10,13 @@ use url::Url;
 mod api_checker;
 mod endpoints;
 mod metrics;
+mod types;
 
 use crate::api_checker::{force_boxed, ApiChecker, CheckerFn};
-use crate::endpoints::{check_balances, check_validators};
+use crate::endpoints::{check_balances, check_block, check_validators};
 
 #[derive(Parser, Debug)]
-#[command(name = "api-checker")]
+#[command(name = "beacon-api-checker")]
 #[command(author = "rauljordan")]
 #[command(version = "0.0.1")]
 #[command(
@@ -56,7 +57,11 @@ async fn main() -> Result<()> {
     // Each function will call a respective API endpoint across all specified
     // beacon node URLs and cross-check their responses.
     // At this time, the pipeline is executed sequentially.
-    let pipeline: Vec<CheckerFn> = vec![force_boxed(check_validators), force_boxed(check_balances)];
+    let pipeline: Vec<CheckerFn> = vec![
+        force_boxed(check_validators),
+        force_boxed(check_balances),
+        force_boxed(check_block),
+    ];
 
     // Builds an API checker from our specified CLI flags
     // and the pipeline defined above.
