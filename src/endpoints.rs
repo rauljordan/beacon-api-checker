@@ -9,8 +9,6 @@ use tokio::time::Instant;
 use tracing::{info, warn};
 use url::Url;
 
-// TODO: Dump the mismatched request if a mismatch happens to debug logs.
-
 // pub async fn check_finality_checkpoints(urls: Vec<Url>) -> Result<()> {
 //     Ok(())
 // }
@@ -48,9 +46,11 @@ pub async fn check_block(urls: Vec<Url>) -> Result<()> {
         method,
         human_duration(&median_latency),
     );
+    crate::metrics::GET_BLOCK_LATENCY_MILLISECONDS.observe(median_latency.as_millis() as f64);
 
     if mismatched_responses(&method, &urls, responses) {
         crate::metrics::BLOCK_NOT_EQUAL_TOTAL.inc();
+        warn!("MISMATCHED REQUEST: endpoint={}", method);
     }
     Ok(())
 }
@@ -94,9 +94,14 @@ pub async fn check_validators(urls: Vec<Url>) -> Result<()> {
         method,
         human_duration(&median_latency),
     );
+    crate::metrics::GET_VALIDATORS_LATENCY_MILLISECONDS.observe(median_latency.as_millis() as f64);
 
     if mismatched_responses(&method, &urls, responses) {
         crate::metrics::VALIDATORS_NOT_EQUAL_TOTAL.inc();
+        warn!(
+            "MISMATCHED REQUEST: endpoint={}, indices={:?}",
+            method, indices
+        );
     }
     Ok(())
 }
@@ -135,8 +140,14 @@ pub async fn check_balances(urls: Vec<Url>) -> Result<()> {
         human_duration(&median_latency),
         indices.len(),
     );
+    crate::metrics::GET_BALANCES_LATENCY_MILLISECONDS.observe(median_latency.as_millis() as f64);
+
     if mismatched_responses(&method, &urls, responses) {
         crate::metrics::BALANCES_NOT_EQUAL_TOTAL.inc();
+        warn!(
+            "MISMATCHED REQUEST: endpoint={}, indices={:?}",
+            method, indices
+        );
     }
     Ok(())
 }

@@ -25,7 +25,7 @@ use crate::endpoints::{check_balances, check_block, check_validators};
 )]
 struct Cli {
     #[arg(long)]
-    beacon_api_endpoints: Vec<String>,
+    endpoint: Vec<String>,
     #[arg(default_value = "127.0.0.1")]
     metrics_host: String,
     #[arg(default_value_t = 8080)]
@@ -40,6 +40,7 @@ struct Cli {
 async fn main() -> Result<()> {
     // Sets up our logging to capture INFO objects to stdout.
     let subscriber = FmtSubscriber::builder()
+        // TODO: Configurable verbosity.
         .with_max_level(Level::INFO)
         .finish();
     tracing::subscriber::set_global_default(subscriber)?;
@@ -47,11 +48,7 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // Parses the list of specified beacon API endpoints.
-    let endpoints: Result<Vec<Url>, _> = cli
-        .beacon_api_endpoints
-        .into_iter()
-        .map(|e| Url::parse(&e))
-        .collect();
+    let endpoints: Result<Vec<Url>, _> = cli.endpoint.into_iter().map(|e| Url::parse(&e)).collect();
 
     // Defines a pipeline of functions to run through our API checker.
     // Each function will call a respective API endpoint across all specified
