@@ -28,6 +28,7 @@ pub async fn check_finality_checkpoints(urls: Vec<Url>) -> Result<()> {
 
     let id = random_state_id();
     let method = format!("/eth/v1/beacon/states/{}/finality_checkpoints", id.inner);
+    let mut succeeded = 0;
     for u in urls.iter() {
         // TODO: Share the clients instead.
         let client = Client::new(u.clone());
@@ -42,6 +43,7 @@ pub async fn check_finality_checkpoints(urls: Vec<Url>) -> Result<()> {
         };
         latencies.push(start.elapsed().as_millis() as u64);
         responses.push(FinalityCheckpointsExt { inner: cpts });
+        succeeded += 1;
     }
     let median_latency = Duration::from_millis(median(&mut latencies));
     info!(
@@ -52,7 +54,7 @@ pub async fn check_finality_checkpoints(urls: Vec<Url>) -> Result<()> {
     crate::metrics::GET_FINALITY_CHECKPOINTS_LATENCY_MILLISECONDS
         .observe(median_latency.as_millis() as f64);
 
-    if mismatched_responses(&method, &urls, responses) {
+    if mismatched_responses(&method, &urls, responses, succeeded) {
         crate::metrics::CHECKPOINT_NOT_EQUAL_TOTAL.inc();
         warn!("MISMATCHED REQUEST: endpoint={}", method);
     }
@@ -62,6 +64,7 @@ pub async fn check_finality_checkpoints(urls: Vec<Url>) -> Result<()> {
 pub async fn check_block(urls: Vec<Url>) -> Result<()> {
     let mut responses: Vec<SignedBeaconBlock> = vec![];
     let mut latencies = vec![];
+    let mut succeeded = 0;
 
     let id = random_block_id();
     let method = format!("/eth/v2/beacon/{}/block", id.inner);
@@ -79,6 +82,7 @@ pub async fn check_block(urls: Vec<Url>) -> Result<()> {
         };
         latencies.push(start.elapsed().as_millis() as u64);
         responses.push(block);
+        succeeded += 1;
     }
     let median_latency = Duration::from_millis(median(&mut latencies));
     info!(
@@ -88,7 +92,7 @@ pub async fn check_block(urls: Vec<Url>) -> Result<()> {
     );
     crate::metrics::GET_BLOCK_LATENCY_MILLISECONDS.observe(median_latency.as_millis() as f64);
 
-    if mismatched_responses(&method, &urls, responses) {
+    if mismatched_responses(&method, &urls, responses, succeeded) {
         crate::metrics::BLOCK_NOT_EQUAL_TOTAL.inc();
         warn!("MISMATCHED REQUEST: endpoint={}", method);
     }
@@ -98,6 +102,7 @@ pub async fn check_block(urls: Vec<Url>) -> Result<()> {
 pub async fn check_validators(urls: Vec<Url>) -> Result<()> {
     let mut responses: Vec<Vec<ValidatorSummaryExt>> = vec![];
     let mut latencies = vec![];
+    let mut succeeded = 0;
 
     let indices = random_validator_indices();
     let id = random_state_id();
@@ -134,6 +139,7 @@ pub async fn check_validators(urls: Vec<Url>) -> Result<()> {
             .map(|v| ValidatorSummaryExt { inner: v })
             .collect();
         responses.push(ext);
+        succeeded += 1;
     }
     let median_latency = Duration::from_millis(median(&mut latencies));
     info!(
@@ -143,7 +149,7 @@ pub async fn check_validators(urls: Vec<Url>) -> Result<()> {
     );
     crate::metrics::GET_VALIDATORS_LATENCY_MILLISECONDS.observe(median_latency.as_millis() as f64);
 
-    if mismatched_responses(&method, &urls, responses) {
+    if mismatched_responses(&method, &urls, responses, succeeded) {
         crate::metrics::VALIDATORS_NOT_EQUAL_TOTAL.inc();
         warn!(
             "MISMATCHED REQUEST: endpoint={}, indices={:?}",
@@ -156,6 +162,7 @@ pub async fn check_validators(urls: Vec<Url>) -> Result<()> {
 pub async fn check_balances(urls: Vec<Url>) -> Result<()> {
     let mut responses: Vec<Vec<BalanceSummaryExt>> = vec![];
     let mut latencies = vec![];
+    let mut succeeded = 0;
 
     let indices = random_validator_indices();
     let id = random_state_id();
@@ -185,6 +192,7 @@ pub async fn check_balances(urls: Vec<Url>) -> Result<()> {
             .map(|v| BalanceSummaryExt { inner: v })
             .collect();
         responses.push(ext);
+        succeeded += 1;
     }
     let median_latency = Duration::from_millis(median(&mut latencies));
     info!(
@@ -195,7 +203,7 @@ pub async fn check_balances(urls: Vec<Url>) -> Result<()> {
     );
     crate::metrics::GET_BALANCES_LATENCY_MILLISECONDS.observe(median_latency.as_millis() as f64);
 
-    if mismatched_responses(&method, &urls, responses) {
+    if mismatched_responses(&method, &urls, responses, succeeded) {
         crate::metrics::BALANCES_NOT_EQUAL_TOTAL.inc();
         warn!(
             "MISMATCHED REQUEST: endpoint={}, indices={:?}",
@@ -267,7 +275,12 @@ fn random_block_id() -> BlockIdExt {
     }
 }
 
-pub fn mismatched_responses<T: Eq>(method: &str, endpoints: &[Url], v: Vec<T>) -> bool {
+pub fn mismatched_responses<T: Eq>(
+    method: &str,
+    endpoints: &[Url],
+    v: Vec<T>,
+    succeeded: usize,
+) -> bool {
     for (i, v1) in v.iter().enumerate() {
         for (j, v2) in v[i..].iter().enumerate() {
             if v1 != v2 {
@@ -278,7 +291,7 @@ pub fn mismatched_responses<T: Eq>(method: &str, endpoints: &[Url], v: Vec<T>) -
             }
         }
     }
-    info!("Got equal {} across {} endpoints", method, endpoints.len());
+    info!("Got equal {} across {} endpoints", method, succeeded);
     false
 }
 
