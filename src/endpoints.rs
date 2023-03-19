@@ -9,10 +9,6 @@ use tokio::time::Instant;
 use tracing::{info, warn};
 use url::Url;
 
-// pub async fn check_finality_checkpoints(urls: Vec<Url>) -> Result<()> {
-//     Ok(())
-// }
-
 // pub async fn check_state_roots(urls: Vec<Url>) -> Result<()> {
 //     Ok(())
 // }
@@ -24,6 +20,44 @@ use url::Url;
 // pub async fn check_block_header(urls: Vec<Url>) -> Result<()> {
 //     Ok(())
 // }
+//
+
+pub async fn check_finality_checkpoints(urls: Vec<Url>) -> Result<()> {
+    let mut responses: Vec<FinalityCheckpointsExt> = vec![];
+    let mut latencies = vec![];
+
+    let id = random_state_id();
+    let method = format!("/eth/v1/beacon/states/{}/finality_checkpoints", id.inner);
+    for u in urls.iter() {
+        // TODO: Share the clients instead.
+        let client = Client::new(u.clone());
+        let start = Instant::now();
+        info!("Calling {} endpoint={}", method, u);
+        let cpts = match client.get_finality_checkpoints(id.clone().inner).await {
+            Ok(res) => res,
+            Err(e) => {
+                warn!("Request method={} endpoint={} failed {:?}", method, u, e);
+                continue;
+            }
+        };
+        latencies.push(start.elapsed().as_millis() as u64);
+        responses.push(FinalityCheckpointsExt { inner: cpts });
+    }
+    let median_latency = Duration::from_millis(median(&mut latencies));
+    info!(
+        "{} median_response_time={}",
+        method,
+        human_duration(&median_latency),
+    );
+    crate::metrics::GET_FINALITY_CHECKPOINTS_LATENCY_MILLISECONDS
+        .observe(median_latency.as_millis() as f64);
+
+    if mismatched_responses(&method, &urls, responses) {
+        crate::metrics::CHECKPOINT_NOT_EQUAL_TOTAL.inc();
+        warn!("MISMATCHED REQUEST: endpoint={}", method);
+    }
+    Ok(())
+}
 
 pub async fn check_block(urls: Vec<Url>) -> Result<()> {
     let mut responses: Vec<SignedBeaconBlock> = vec![];
@@ -36,7 +70,13 @@ pub async fn check_block(urls: Vec<Url>) -> Result<()> {
         let client = Client::new(u.clone());
         let start = Instant::now();
         info!("Calling {} endpoint={}", method, u);
-        let block = client.get_beacon_block(id.clone().inner).await?;
+        let block = match client.get_beacon_block(id.clone().inner).await {
+            Ok(res) => res,
+            Err(e) => {
+                warn!("Request method={} endpoint={} failed {:?}", method, u, e);
+                continue;
+            }
+        };
         latencies.push(start.elapsed().as_millis() as u64);
         responses.push(block);
     }
@@ -75,9 +115,16 @@ pub async fn check_validators(urls: Vec<Url>) -> Result<()> {
             u,
             indices.len(),
         );
-        let mut validators = client
+        let mut validators = match client
             .get_validators(id.clone().inner, &indices, &filters)
-            .await?;
+            .await
+        {
+            Ok(res) => res,
+            Err(e) => {
+                warn!("Request method={} endpoint={} failed {:?}", method, u, e);
+                continue;
+            }
+        };
         latencies.push(start.elapsed().as_millis() as u64);
 
         // Sort by validator index.
@@ -123,7 +170,13 @@ pub async fn check_balances(urls: Vec<Url>) -> Result<()> {
             u,
             indices.len(),
         );
-        let mut balances = client.get_balances(id.clone().inner, &indices).await?;
+        let mut balances = match client.get_balances(id.clone().inner, &indices).await {
+            Ok(res) => res,
+            Err(e) => {
+                warn!("Request method={} endpoint={} failed {:?}", method, u, e);
+                continue;
+            }
+        };
         latencies.push(start.elapsed().as_millis() as u64);
         // Sort by validator index.
         balances.sort_by(|a, b| a.index.cmp(&b.index));

@@ -1,4 +1,6 @@
-use beacon_api_client::{BalanceSummary, BlockId, StateId, ValidatorStatus, ValidatorSummary};
+use beacon_api_client::{
+    BalanceSummary, BlockId, FinalityCheckpoints, StateId, ValidatorStatus, ValidatorSummary,
+};
 
 pub struct StateIdExt {
     pub inner: StateId,
@@ -52,6 +54,24 @@ impl Clone for BlockIdExt {
                 inner: BlockId::Root(x),
             },
         }
+    }
+}
+
+pub struct FinalityCheckpointsExt {
+    pub inner: FinalityCheckpoints,
+}
+
+impl Eq for FinalityCheckpointsExt {}
+
+impl PartialEq for FinalityCheckpointsExt {
+    fn eq(&self, other: &Self) -> bool {
+        if self.inner.previous_justified != other.inner.previous_justified {
+            return false;
+        }
+        if self.inner.current_justified != other.inner.current_justified {
+            return false;
+        }
+        self.inner.finalized == other.inner.finalized
     }
 }
 

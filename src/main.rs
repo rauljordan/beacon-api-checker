@@ -1,5 +1,6 @@
 use axum::{routing::get, Router};
 use clap::Parser;
+use endpoints::check_finality_checkpoints;
 use eyre::Result;
 use futures::future::join_all;
 use tokio::time::{interval, Duration};
@@ -58,6 +59,7 @@ async fn main() -> Result<()> {
         force_boxed(check_validators),
         force_boxed(check_balances),
         force_boxed(check_block),
+        force_boxed(check_finality_checkpoints),
     ];
 
     // Builds an API checker from our specified CLI flags
