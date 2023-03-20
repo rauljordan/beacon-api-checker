@@ -44,9 +44,10 @@ pub async fn check_state_root(urls: Vec<Url>) -> Result<()> {
     );
     crate::metrics::GET_STATE_ROOT_LATENCY_MILLISECONDS.observe(median_latency.as_millis() as f64);
 
-    if mismatched_responses(&method, &urls, responses, succeeded) {
+    if mismatched_responses(&method, &urls, &responses, succeeded) {
         crate::metrics::STATE_ROOT_NOT_EQUAL_TOTAL.inc();
         warn!("MISMATCHED REQUEST: endpoint={}", method);
+        warn!("Responses: {:?}", responses);
     }
     Ok(())
 }
@@ -83,9 +84,10 @@ pub async fn check_finality_checkpoints(urls: Vec<Url>) -> Result<()> {
     crate::metrics::GET_FINALITY_CHECKPOINTS_LATENCY_MILLISECONDS
         .observe(median_latency.as_millis() as f64);
 
-    if mismatched_responses(&method, &urls, responses, succeeded) {
+    if mismatched_responses(&method, &urls, &responses, succeeded) {
         crate::metrics::CHECKPOINT_NOT_EQUAL_TOTAL.inc();
         warn!("MISMATCHED REQUEST: endpoint={}", method);
+        warn!("Responses: {:?}", responses);
     }
     Ok(())
 }
@@ -121,9 +123,10 @@ pub async fn check_block(urls: Vec<Url>) -> Result<()> {
     );
     crate::metrics::GET_BLOCK_LATENCY_MILLISECONDS.observe(median_latency.as_millis() as f64);
 
-    if mismatched_responses(&method, &urls, responses, succeeded) {
+    if mismatched_responses(&method, &urls, &responses, succeeded) {
         crate::metrics::BLOCK_NOT_EQUAL_TOTAL.inc();
         warn!("MISMATCHED REQUEST: endpoint={}", method);
+        warn!("Responses: {:?}", responses);
     }
     Ok(())
 }
@@ -178,12 +181,13 @@ pub async fn check_validators(urls: Vec<Url>) -> Result<()> {
     );
     crate::metrics::GET_VALIDATORS_LATENCY_MILLISECONDS.observe(median_latency.as_millis() as f64);
 
-    if mismatched_responses(&method, &urls, responses, succeeded) {
+    if mismatched_responses(&method, &urls, &responses, succeeded) {
         crate::metrics::VALIDATORS_NOT_EQUAL_TOTAL.inc();
         warn!(
             "MISMATCHED REQUEST: endpoint={}, indices={:?}",
             method, indices
         );
+        warn!("Responses: {:?}", responses);
     }
     Ok(())
 }
@@ -232,21 +236,22 @@ pub async fn check_balances(urls: Vec<Url>) -> Result<()> {
     );
     crate::metrics::GET_BALANCES_LATENCY_MILLISECONDS.observe(median_latency.as_millis() as f64);
 
-    if mismatched_responses(&method, &urls, responses, succeeded) {
+    if mismatched_responses(&method, &urls, &responses, succeeded) {
         crate::metrics::BALANCES_NOT_EQUAL_TOTAL.inc();
         warn!(
             "MISMATCHED REQUEST: endpoint={}, indices={:?}",
             method, indices
         );
+        warn!("Responses: {:?}", responses);
     }
     Ok(())
 }
 
-// Random slot in the last 100 slots on mainnet.
+// Random slot in the last 64 slots on prater.
 fn random_slot(rng: &mut ThreadRng) -> u64 {
-    let mainnet_clock = clock::for_mainnet();
-    let curr = mainnet_clock.current_slot();
-    rng.gen_range(curr - 100..curr)
+    let c = clock::for_goerli();
+    let curr = c.current_slot();
+    rng.gen_range(curr - 64..curr)
 }
 
 fn random_state_id() -> StateIdExt {
@@ -274,7 +279,7 @@ fn random_state_id() -> StateIdExt {
 fn random_validator_indices() -> Vec<PublicKeyOrIndex> {
     let mut indices: Vec<PublicKeyOrIndex> = vec![];
     let mut rng = rand::thread_rng();
-    let num_elems: u64 = rng.gen_range(0..100);
+    let num_elems: u64 = rng.gen_range(1..100);
     for _ in 0..num_elems {
         let idx: usize = rng.gen_range(0..500_000);
         indices.push(PublicKeyOrIndex::from(ValidatorIndex::from(idx)));
@@ -307,7 +312,7 @@ fn random_block_id() -> BlockIdExt {
 pub fn mismatched_responses<T: Eq>(
     method: &str,
     endpoints: &[Url],
-    v: Vec<T>,
+    v: &Vec<T>,
     succeeded: usize,
 ) -> bool {
     for (i, v1) in v.iter().enumerate() {
@@ -320,11 +325,16 @@ pub fn mismatched_responses<T: Eq>(
             }
         }
     }
-    info!("Got equal {} across {} endpoints", method, succeeded);
+    if endpoints.len() > 1 {
+        info!("Got equal {} across {} endpoints", method, succeeded);
+    }
     false
 }
 
 fn median(latencies: &mut Vec<u64>) -> u64 {
+    if latencies.len() == 0 {
+        return 0;
+    }
     latencies.sort();
     if (latencies.len() % 2) == 0 {
         let ind_left = latencies.len() / 2 - 1;

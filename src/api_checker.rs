@@ -39,7 +39,7 @@ pub struct ApiChecker {
 impl Default for ApiChecker {
     fn default() -> Self {
         ApiChecker {
-            run_every: Duration::from_secs(60),
+            run_every: Duration::from_millis(250),
             endpoints: vec![],
             fns: vec![],
             timeout: Duration::from_secs(10),

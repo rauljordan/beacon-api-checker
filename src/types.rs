@@ -61,6 +61,16 @@ pub struct FinalityCheckpointsExt {
     pub inner: FinalityCheckpoints,
 }
 
+impl std::fmt::Debug for FinalityCheckpointsExt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FinalityCheckpointsExt")
+            .field("previous_justified", &self.inner.previous_justified)
+            .field("current_justified", &self.inner.current_justified)
+            .field("finalized", &self.inner.finalized)
+            .finish()
+    }
+}
+
 impl Eq for FinalityCheckpointsExt {}
 
 impl PartialEq for FinalityCheckpointsExt {
@@ -75,6 +85,7 @@ impl PartialEq for FinalityCheckpointsExt {
     }
 }
 
+#[derive(Debug)]
 pub struct ValidatorSummaryExt {
     pub inner: ValidatorSummary,
 }
@@ -102,6 +113,7 @@ impl PartialEq for ValidatorSummaryExt {
     }
 }
 
+#[derive(Debug)]
 pub struct ValidatorStatusExt {
     pub inner: ValidatorStatus,
 }
@@ -118,6 +130,15 @@ impl PartialEq for ValidatorStatusExt {
 
 pub struct BalanceSummaryExt {
     pub inner: BalanceSummary,
+}
+
+impl std::fmt::Debug for BalanceSummaryExt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BalanceSummaryExt")
+            .field("index", &self.inner.index)
+            .field("balance", &self.inner.balance)
+            .finish()
+    }
 }
 
 impl Eq for BalanceSummaryExt {}

@@ -33,7 +33,7 @@ struct Cli {
     #[arg(default_value_t = 8080)]
     metrics_port: u32,
     #[arg(value_parser = parse_duration)]
-    interval_seconds: Option<Duration>,
+    interval_millis: Option<Duration>,
     #[arg(value_parser = parse_duration)]
     http_timeout: Option<Duration>,
 }
@@ -73,8 +73,8 @@ async fn main() -> Result<()> {
     if cli.http_timeout.is_some() {
         api_checker = api_checker.timeout(cli.http_timeout.unwrap());
     }
-    if cli.interval_seconds.is_some() {
-        api_checker = api_checker.run_every(cli.interval_seconds.unwrap());
+    if cli.interval_millis.is_some() {
+        api_checker = api_checker.run_every(cli.interval_millis.unwrap());
     }
     api_checker = api_checker.build();
 
@@ -108,6 +108,6 @@ pub async fn run_api_checker(checker: ApiChecker) {
 }
 
 fn parse_duration(arg: &str) -> Result<Duration, std::num::ParseIntError> {
-    let seconds = arg.parse()?;
-    Ok(Duration::from_secs(seconds))
+    let millis = arg.parse()?;
+    Ok(Duration::from_millis(millis))
 }
