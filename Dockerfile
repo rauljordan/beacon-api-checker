@@ -38,4 +38,4 @@ COPY --from=builder /beacon-api-checker/target/x86_64-unknown-linux-musl/release
 # Use an unprivileged user.
 USER beacon-api-checker:beacon-api-checker
 
-CMD ["/beacon-api-checker/beacon-api-checker"]
+ENTRYPOINT ["/beacon-api-checker/beacon-api-checker"]
